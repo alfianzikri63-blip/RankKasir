@@ -1,0 +1,80 @@
+name: RankMate Kasir - Auto APK Debug
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug:
+    name: Build APK Debug dari ZIP source
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Konfirmasi workflow aktif
+        run: |
+          echo "RANKMATE_WORKFLOW_TRIGGERED"
+          echo "Event: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref_name }}"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ekstrak source Android otomatis
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s RankMate_Kasir_Android_V11_Source.zip || {
+            echo 'Source ZIP belum ada di root repository.'
+            exit 1
+          }
+          unzip -tq RankMate_Kasir_Android_V11_Source.zip
+          mkdir -p rankmate-android
+          unzip -q -o RankMate_Kasir_Android_V11_Source.zip -d rankmate-android
+          test -f rankmate-android/settings.gradle
+          test -f rankmate-android/app/build.gradle
+          test -s rankmate-android/app/src/main/assets/web/index.html
+          test -f rankmate-android/app/src/main/java/com/rankmate/reportkasir/UpdateChecker.java
+          test -f rankmate-android/app/src/main/java/com/rankmate/reportkasir/UpdateJobService.java
+          echo "RANKMATE_ANDROID_SOURCE_OK"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Assemble APK Debug
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace -p rankmate-android :app:assembleDebug
+          test -s rankmate-android/app/build/outputs/apk/debug/app-debug.apk
+          echo "RANKMATE_DEBUG_APK_READY"
+
+      - name: Upload APK Debug
+        uses: actions/upload-artifact@v4
+        with:
+          name: RankMate-Kasir-APK-Debug
+          path: rankmate-android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
