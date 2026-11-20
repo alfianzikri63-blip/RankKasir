@@ -1,49 +1,45 @@
-name: RankMate Kasir - Auto APK Debug
+name: RankMate Kasir - Auto Build APK Debug
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build-debug:
-    name: Build APK Debug dari ZIP source
+  debug-apk:
+    name: Build APK Debug RankMate v10.1.1
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
     steps:
-      - name: Konfirmasi workflow aktif
+      - name: Tes pemicu GitHub Actions
         run: |
-          echo "RANKMATE_WORKFLOW_TRIGGERED"
+          echo "WORKFLOW_TRIGGERED"
           echo "Event: ${{ github.event_name }}"
-          echo "Branch: ${{ github.ref_name }}"
 
-      - name: Checkout repository
+      - name: Checkout source repo
         uses: actions/checkout@v4
 
-      - name: Ekstrak source Android otomatis
+      - name: Ekstrak ZIP source Android
         shell: bash
         run: |
           set -euo pipefail
-          test -s RankMate_Kasir_Android_V11_Source.zip || {
-            echo 'Source ZIP belum ada di root repository.'
-            exit 1
-          }
-          unzip -tq RankMate_Kasir_Android_V11_Source.zip
+          SOURCE_ZIP='RankMate_Kasir_Android_SupabaseBaru_v10_1_1.zip'
+          test -s "$SOURCE_ZIP" || { echo "ZIP source belum ada di ROOT repo: $SOURCE_ZIP"; exit 1; }
+          unzip -tq "$SOURCE_ZIP"
           mkdir -p rankmate-android
-          unzip -q -o RankMate_Kasir_Android_V11_Source.zip -d rankmate-android
+          unzip -q -o "$SOURCE_ZIP" -d rankmate-android
           test -f rankmate-android/settings.gradle
           test -f rankmate-android/app/build.gradle
           test -s rankmate-android/app/src/main/assets/web/index.html
-          test -f rankmate-android/app/src/main/java/com/rankmate/reportkasir/UpdateChecker.java
-          test -f rankmate-android/app/src/main/java/com/rankmate/reportkasir/UpdateJobService.java
-          echo "RANKMATE_ANDROID_SOURCE_OK"
+          grep -q 'VERSION_NAME=10.1.1' rankmate-android/app/version.properties
+          grep -q 'jcmhjmvudpquapzcajfe.supabase.co' rankmate-android/app/src/main/assets/web/index.html
+          echo "ANDROID_SOURCE_OK"
 
-      - name: Setup Java 17
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -52,29 +48,26 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Install Android SDK 35
-        shell: bash
-        run: |
-          set -euo pipefail
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Install SDK 35
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
 
       - name: Setup Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
-      - name: Assemble APK Debug
+      - name: Build APK Debug
         shell: bash
         run: |
           set -euo pipefail
           gradle --no-daemon --stacktrace -p rankmate-android :app:assembleDebug
           test -s rankmate-android/app/build/outputs/apk/debug/app-debug.apk
-          echo "RANKMATE_DEBUG_APK_READY"
+          echo "APK_DEBUG_READY"
 
-      - name: Upload APK Debug
+      - name: Upload APK Debug artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RankMate-Kasir-APK-Debug
+          name: RankMate-v10_1_1-Debug-APK
           path: rankmate-android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
